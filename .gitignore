@@ -1,0 +1,25 @@
+.DS_Store
+
+# Backend
+backend/target/
+backend/.m2/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.idea/
+backend/*.iml
+backend/.classpath
+backend/.project
+backend/.settings/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/tsconfig.tsbuildinfo
+
+# Logs
+*.log
+
+# Env
+.env
+.env.local

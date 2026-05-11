@@ -1,0 +1,38 @@
+groups:
+  - name: warehouse-backend-alerts
+    rules:
+      - alert: WarehouseBackendDown
+        expr: up{job="warehouse-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Warehouse backend is down"
+          description: "Prometheus cannot scrape the warehouse backend for at least 2 minutes."
+
+      - alert: WarehouseHighHttp5xxRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="warehouse-backend",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{job="warehouse-backend"}[5m])), 0.001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx ratio"
+          description: "More than 5% of backend requests are HTTP 5xx over the last 5 minutes."
+
+      - alert: WarehouseReserveP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(warehouse_reservation_operation_duration_seconds_bucket{operation="reserve",result="success"}[5m])) by (le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reserve p95 latency is high"
+          description: "Successful reserve operations have p95 latency above 1 second for 10 minutes."

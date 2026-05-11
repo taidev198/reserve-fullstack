@@ -1,0 +1,144 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["local-infra"]
+    container_name: ${POSTGRES_CONTAINER_NAME:-warehouse-postgres}
+    environment:
+      POSTGRES_DB: warehouse
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse -d warehouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["local-infra"]
+    container_name: ${REDIS_CONTAINER_NAME:-warehouse-redis}
+    # AOF on with everysec — survives a crash with at most 1s of data
+    # loss. For stock counts we also have Postgres as the cold-start
+    # source of truth (RedisInventoryBootstrap re-seeds on startup).
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["observability"]
+    container_name: ${PROMETHEUS_CONTAINER_NAME:-warehouse-prometheus}
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  loki:
+    image: grafana/loki:3.1.1
+    profiles: ["observability"]
+    container_name: ${LOKI_CONTAINER_NAME:-warehouse-loki}
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/config.yml:ro
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    profiles: ["observability"]
+    container_name: ${PROMTAIL_CONTAINER_NAME:-warehouse-promtail}
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - ./backend/logs:/var/log/warehouse:ro
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles: ["observability"]
+    container_name: ${GRAFANA_CONTAINER_NAME:-warehouse-grafana}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    profiles: ["elk"]
+    container_name: ${ELASTICSEARCH_CONTAINER_NAME:-warehouse-elasticsearch}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.14.3
+    profiles: ["elk"]
+    container_name: ${LOGSTASH_CONTAINER_NAME:-warehouse-logstash}
+    ports:
+      - "${LOGSTASH_BEATS_PORT:-5044}:5044"
+    volumes:
+      - ./monitoring/elk/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.14.3
+    profiles: ["elk"]
+    container_name: ${KIBANA_CONTAINER_NAME:-warehouse-kibana}
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.14.3
+    profiles: ["elk"]
+    container_name: ${FILEBEAT_CONTAINER_NAME:-warehouse-filebeat}
+    user: root
+    command: ["filebeat", "-e", "-strict.perms=false"]
+    volumes:
+      - ./monitoring/elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./backend/logs:/var/log/warehouse:ro
+    depends_on:
+      - logstash
+
+volumes:
+  postgres-data:
+  redis-data:
+  grafana-data:
+  elasticsearch-data:

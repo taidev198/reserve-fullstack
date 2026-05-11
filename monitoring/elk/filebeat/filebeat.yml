@@ -1,0 +1,20 @@
+filebeat.inputs:
+  - type: filestream
+    id: warehouse-backend-logs
+    enabled: true
+    paths:
+      - /var/log/warehouse/*.log
+    parsers:
+      # Join Java stacktraces and multiline exceptions into one event.
+      - multiline:
+          type: pattern
+          pattern: '^\d{4}-\d{2}-\d{2}T'
+          negate: true
+          match: after
+    fields:
+      app_service: warehouse-backend
+      env: local
+    fields_under_root: true
+
+output.logstash:
+  hosts: ["logstash:5044"]

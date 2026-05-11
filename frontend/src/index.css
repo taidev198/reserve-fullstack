@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent intrinsic min-width from blocking shrink when the viewport gets narrower */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #root {
+    @apply isolate min-h-screen w-full min-w-0;
+  }
+}
