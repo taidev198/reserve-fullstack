@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   test:
@@ -38,7 +39,7 @@ jobs:
         run: |
           echo "## JaCoCo coverage report" >> "$GITHUB_STEP_SUMMARY"
           echo "Download the **jacoco-backend-report** artifact from this job to open \`index.html\` locally (Git does not commit \`backend/target/\`)." >> "$GITHUB_STEP_SUMMARY"
-          echo "Optional: add a **CODECOV_TOKEN** repository secret for uploads to [Codecov](https://codecov.io/)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Optional: activate this repo on [Codecov](https://codecov.io/) (GitHub sign-in); uploads use OIDC from this workflow." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload JaCoCo report (HTML + XML)
         uses: actions/upload-artifact@v4
@@ -53,7 +54,7 @@ jobs:
         if: success()
         continue-on-error: true
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           files: backend/target/site/jacoco/jacoco.xml
           flags: backend
           name: warehouse-backend

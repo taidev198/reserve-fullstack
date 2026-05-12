@@ -1,9 +1,10 @@
 # Warehouse Inventory Reservation System
 
-[![Backend CI](https://github.com/taidev198/reserve-fullstack/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/taidev198/reserve-fullstack/actions/workflows/backend-ci.yml)
-[![codecov](https://codecov.io/gh/taidev198/reserve-fullstack/graph/badge.svg)](https://codecov.io/gh/taidev198/reserve-fullstack)
+[![Backend CI](https://img.shields.io/github/actions/workflow/status/taidev198/reserve-fullstack/backend-ci.yml?branch=main&label=Backend%20CI&logo=github)](https://github.com/taidev198/reserve-fullstack/actions/workflows/backend-ci.yml)
+[![Codecov](https://img.shields.io/codecov/c/github/taidev198/reserve-fullstack/main?label=codecov&logo=codecov)](https://codecov.io/gh/taidev198/reserve-fullstack)
 
-*The Codecov badge fills in after you import this repository on [codecov.io](https://codecov.io/gh/taidev198/reserve-fullstack) and add the **`CODECOV_TOKEN`** secret (see **Backend code coverage** under Tests).*
+* **Backend CI** — Shields reads your workflow on **`main`**. It stays *unknown / no data* until at least one run has **finished** on `main` (push the workflow, then open **Actions → Backend CI**). If Actions are disabled: **Settings → Actions → General → Allow all actions**.
+* **Codecov** — The workflow uses **OIDC** (`use_oidc: true`) so you usually **do not** need a `CODECOV_TOKEN` secret for uploads from **`main`**. Activate the repo once at [codecov.io](https://codecov.io/gh/taidev198/reserve-fullstack) (sign in with GitHub), then let **Backend CI** run; the Shields codecov badge fills after the first successful upload. Fork PRs may still need a token; see Codecov docs.
 
 Full-stack implementation of **Challenge 2 — Warehouse Inventory Reservation System** (Middle Fullstack Java Engineer exercise). Multiple callers (UI or API) can reserve inventory for orders, then confirm or cancel. The design focuses on **correct concurrency** so stock is never oversold under parallel requests.
 
@@ -119,7 +120,7 @@ You can also click **Run workflow** on **Actions → Backend CI** (manual **`wor
 
 The backend **`pom.xml`** configures **`jacoco-maven-plugin`**: **`prepare-agent`** on the test JVM and **`report`** bound to the **`test`** phase. After **`cd backend && ./mvnw test`**, open the HTML report at **`backend/target/site/jacoco/index.html`**. Machine-readable coverage is in **`backend/target/site/jacoco/jacoco.xml`**.
 
-On **GitHub**, workflow **[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml)** runs the same tests (Docker available for Testcontainers), uploads the **`jacoco-backend-report`** artifact (HTML + XML) on each run, and optionally pushes **`jacoco.xml`** to **[Codecov](https://codecov.io/)** when you add a repository secret **`CODECOV_TOKEN`** (create a token at Codecov after importing **`taidev198/reserve-fullstack`**). The Codecov badge above then reflects branch coverage on the default branch.
+On **GitHub**, workflow **[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml)** runs the same tests (Docker available for Testcontainers), uploads the **`jacoco-backend-report`** artifact (HTML + XML) on each run, and uploads **`jacoco.xml`** to **[Codecov](https://codecov.io/gh/taidev198/reserve-fullstack)** using **OIDC** (no repo secret required for normal pushes to **`main`** once the repo is activated in Codecov). The Shields **codecov** badge reflects **`main`** after the first successful upload.
 
 ### Load testing with wrk
 
@@ -308,7 +309,7 @@ Integration test **`ReservationServiceIntegrationTest#concurrent_reservations_ne
 .
 ├── .github/
 │   └── workflows/
-│       └── backend-ci.yml    # Maven test + JaCoCo; artifact + optional Codecov
+│       └── backend-ci.yml    # Maven test + JaCoCo; artifact + Codecov (OIDC)
 ├── README.md
 ├── docs/
 │   └── screenshots/            # dashboard.png — UI screenshot for README
