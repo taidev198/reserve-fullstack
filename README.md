@@ -45,6 +45,10 @@ cd frontend && npm install && npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` → `http://localhost:8080`, so the UI calls `/api/...` without CORS configuration.
 
+### Screenshot
+
+![Inventory dashboard — stock summary, create reservation, and reservations](docs/screenshots/dashboard.png)
+
 ### Optional: observability stack
 
 ```bash
@@ -282,6 +286,8 @@ Integration test **`ReservationServiceIntegrationTest#concurrent_reservations_ne
 ```
 .
 ├── README.md
+├── docs/
+│   └── screenshots/            # dashboard.png — UI screenshot for README
 ├── docker-compose.yml          # observability / elk profiles (+ optional postgres/redis uncomment)
 ├── backend/                    # Spring Boot, Flyway, Lua scripts
 │   ├── src/main/java/com/taidev/warehouse/
