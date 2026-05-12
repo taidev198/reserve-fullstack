@@ -18,7 +18,7 @@ spring:
 
 logging:
   level:
-    com.cmc.warehouse: DEBUG
+    com.taidev.warehouse: DEBUG
 
 app:
   cors:

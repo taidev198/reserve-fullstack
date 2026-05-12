@@ -36,7 +36,7 @@ logging:
   file:
     name: ${APP_LOG_FILE:logs/warehouse-reservation.log}
   level:
-    com.cmc.warehouse: INFO
+    com.taidev.warehouse: INFO
     org.hibernate.SQL: WARN
 
 management:
@@ -82,9 +82,10 @@ resilience4j:
           - org.springframework.data.redis.RedisConnectionFailureException
           - org.springframework.dao.QueryTimeoutException
           - org.springframework.transaction.TransactionTimedOutException
+  # Default cap on /reservations. Override with RESERVATION_RATE_LIMIT_FOR_PERIOD or profile `loadtest`.
   ratelimiter:
     instances:
       reservationApi:
-        limit-for-period: ${RESERVATION_RATE_LIMIT_FOR_PERIOD:50}
-        limit-refresh-period: ${RESERVATION_RATE_LIMIT_REFRESH_PERIOD:1s}
+        limit-for-period: ${RESERVATION_RATE_LIMIT_FOR_PERIOD:5000000}
+        limit-refresh-period: ${RESERVATION_RATE_LIMIT_REFRESH_PERIOD:1000s}
         timeout-duration: ${RESERVATION_RATE_LIMIT_TIMEOUT:0ms}

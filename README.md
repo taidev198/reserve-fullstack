@@ -64,12 +64,47 @@ Backend logs go to `backend/logs/warehouse-reservation.log`; Filebeat ships them
 ### Tests
 
 ```bash
-# Backend — Docker must be running (Testcontainers Redis). ~30 tests including concurrency proof.
+# Backend — Docker must be running (Testcontainers starts Redis 7). Full suite: REST integration,
+# service integration, domain unit tests, and Lua scripts against Redis (~43 tests).
 cd backend && ./mvnw test
 
-# Frontend — Vitest + RTL
+# Frontend — Vitest + Testing Library (jsdom): component tests + dashboard integration test.
 cd frontend && npm test
 ```
+
+#### Backend integration tests
+
+Integration tests extend **`BaseIntegrationTest`**: full **Spring Boot** context, **H2** in PostgreSQL compatibility mode (Flyway migrations), and a real **Redis 7** instance from **Testcontainers**. `JdbcTemplate` + `StringRedisTemplate` reseed inventory and flush Redis before each test so order does not matter.
+
+| Class | Role |
+| --- | --- |
+| **`ReservationControllerTest`** | **MockMvc** HTTP API: create reservation, validation `400`, unknown SKU `404`, duplicate active order `409`, idempotent replay header, confirm/cancel/get, paged list, inventory list. |
+| **`InventoryPaginationIntegrationTest`** | Inventory `GET` defaults and out-of-range page (empty slice, totals preserved). |
+| **`ActuatorHealthIntegrationTest`** | **`GET /actuator/health`** returns **`UP`** with the same stack. |
+| **`ReservationMultiLineIntegrationTest`** | **`POST /reservations`** with multiple line items; confirm path for a multi-SKU reservation. |
+| **`ReservationServiceIntegrationTest`** | Service-level flows and **`concurrent_reservations_never_oversell`** (parallel reserves vs. a fixed pool). |
+| **`LuaStockScriptTest`** | **`reserve` / `release` / `consume`** Lua scripts executed against Testcontainers Redis. |
+
+Faster **unit** tests (no Redis): **`InventoryTest`**, **`ReservationStateTest`**, **`ReservationFactoryTest`**.
+
+#### Frontend integration tests
+
+| File | Role |
+| --- | --- |
+| **`src/test/App.integration.test.tsx`** | Renders **`App`**, stubs **`globalThis.fetch`** with JSON matching the backend **`ApiEnvelope`** (`statusCode`, `message`, `data`), checks dashboard load, create reservation → list refresh, and **Confirm** on a row. |
+| **`ReservationForm.test.tsx`**, **`ReservationRow.test.tsx`**, **`StockHealthBar.test.tsx`** | Component behaviour (validation, toasts, optimistic actions, meter). |
+
+Vitest is configured in **`vite.config.ts`** (`environment: 'jsdom'`, **`setupFiles: ./src/test/setup.ts`**).
+
+### Load testing with wrk
+
+[wrk](https://github.com/wg/wrk) drives HTTP load from a small LuaJIT script. After the API is up (`./mvnw spring-boot:run` or your deployment), install wrk (e.g. `brew install wrk` on macOS) and run:
+
+```bash
+./loadtest/wrk/run-reserve.sh
+```
+
+Environment variables: `BASE_URL` (default `http://localhost:8080`), `WRK_THREADS`, `WRK_CONNECTIONS`, `WRK_DURATION` (e.g. `60s`), `SKUS`, `ITEM_QTY`, `SKIP_HEALTH=1` to skip the health probe. For sustained reservation POSTs without rate-limit noise, start the backend with `SPRING_PROFILES_ACTIVE=loadtest` or raise `RESERVATION_RATE_LIMIT_FOR_PERIOD` (same idea as `loadtest/k6/run-reserve.sh`). There is also a **k6** scenario under `loadtest/k6/` if you prefer Grafana k6.
 
 ---
 
@@ -183,7 +218,7 @@ created_at            reserved_quantity          version
 - **Hooks:** **`useAsync`** — loading/success/error + **call-id** guard so stale responses cannot overwrite newer ones.
 - **Forms:** `ReservationForm` validates order id + lines against live **`availableQuantity`**; submit disabled when invalid or in-flight; duplicate creates surface **`X-Reservation-Idempotent-Replay`** via toast + header parsing.
 - **Mutations:** `ReservationRow` uses **optimistic** status while confirm/cancel runs; rolls back on **`ApiError`**; buttons honor **`canConfirm` / `canCancel`** from the server.
-- **A11y / tests:** `StockHealthBar` uses **`role="meter"`**; Vitest + RTL in `src/test/`.
+- **A11y / tests:** `StockHealthBar` uses **`role="meter"`**; Vitest + RTL in `src/test/` (components + **`App.integration.test.tsx`** for the full dashboard with a mocked **`fetch`**).
 
 Details: **Appendix G — Frontend (detailed)**.
 
@@ -229,7 +264,7 @@ Errors use structured bodies with codes such as `INSUFFICIENT_STOCK`, `ILLEGAL_T
 2. **SQL CAS** — `UPDATE inventory SET reserved_quantity = reserved_quantity + :qty WHERE … AND (total_quantity - reserved_quantity) >= :qty` (and analogous predicates for release/consume).
 3. **Compensation** — If Lua succeeds and SQL fails, **release** Lua-side holds to match DB truth inside the same failure handling path.
 
-Integration test `ReservationServiceIntegrationTest#concurrent_reservations_never_oversell` stresses 50 parallel reserves against a fixed pool.
+Integration test **`ReservationServiceIntegrationTest#concurrent_reservations_never_oversell`** stresses 50 parallel reserves against a fixed pool. REST coverage lives in **`ReservationControllerTest`** and related classes (see **Tests**).
 
 ---
 
@@ -249,12 +284,13 @@ Integration test `ReservationServiceIntegrationTest#concurrent_reservations_neve
 ├── README.md
 ├── docker-compose.yml          # observability / elk profiles (+ optional postgres/redis uncomment)
 ├── backend/                    # Spring Boot, Flyway, Lua scripts
-│   └── src/main/java/com/cmc/warehouse/
-│       ├── api/                # controllers, DTOs, advice
-│       ├── domain/             # reservation state, inventory, product
-│       ├── repository/       # JPA + CAS queries
-│       ├── service/            # ReservationService, InventoryService, Factory, jobs
-│       └── service/stock/      # Redis bootstrap, reconciliation helpers
+│   ├── src/main/java/com/taidev/warehouse/
+│   │   ├── api/                # controllers, DTOs, advice
+│   │   ├── domain/             # reservation state, inventory, product
+│   │   ├── repository/         # JPA + CAS queries
+│   │   ├── service/            # ReservationService, InventoryService, Factory, jobs
+│   │   └── service/stock/      # Redis bootstrap, reconciliation helpers
+│   └── src/test/java/com/taidev/warehouse/   # JUnit 5: *Test.java (MockMvc + Testcontainers Redis + H2)
 └── frontend/                   # Vite React app (see Appendix G)
     └── src/
         ├── api/client.ts
@@ -394,7 +430,8 @@ If Lua succeeded but SQL CAS fails partway, **`release.lua`** rolls back Redis h
 ### Proof in tests
 
 - **`ReservationServiceIntegrationTest#concurrent_reservations_never_oversell`** — 50 threads × 5 units from a 100-unit pool: exactly 20 succeed; Postgres and Redis totals match 100.
-- **`LuaStockScriptTest`** — scripts tested in isolation.
+- **`LuaStockScriptTest`** — scripts tested in isolation against Testcontainers Redis.
+- **REST integration** — **`ReservationControllerTest`**, **`ReservationMultiLineIntegrationTest`**, **`InventoryPaginationIntegrationTest`**, **`ActuatorHealthIntegrationTest`** exercise the HTTP layer end-to-end with H2 + Redis (see **Tests** above).
 
 ---
 
@@ -503,7 +540,7 @@ After import, open dashboard **`Warehouse Logs Overview`**.
 | Piece | Role |
 | --- | --- |
 | **Vite** | Dev server, HMR, production build |
-| **Vitest** | Unit/component tests (`npm test`, `npm run test:watch`) |
+| **Vitest** | Unit, component, and **`App`** integration tests (`npm test`, `npm run test:watch`) |
 | **Tailwind + PostCSS** | Utility-first styling (`tailwind.config.js`, `src/index.css`) |
 | **Sonner** | Non-blocking toasts (`main.tsx` mounts `<Toaster richColors position="top-right" />`) |
 
@@ -543,7 +580,7 @@ frontend/src/
 │   └── ui/                  # Button, Card, Banner, StatusBadge, StockHealthBar
 ├── pages/                   # DashboardPage, ReservationsPage — not imported by App.tsx
 ├── components/layout/Layout.tsx
-└── test/                    # Vitest + RTL + setup.ts (jsdom)
+└── test/                    # Vitest + RTL + setup.ts (jsdom); App.integration.test.tsx = full dashboard + fetch mock
 ```
 
 ### API client (`api/client.ts`)
@@ -590,7 +627,8 @@ Types intentionally **mirror backend DTOs** (`InventoryView`, `ReservationView`,
 ### Testing
 
 - **Vitest** config lives in **`vite.config.ts`** (`environment: 'jsdom'`, **`setupFiles: ./src/test/setup.ts`**).
-- Representative tests: **`ReservationForm`**, **`ReservationRow`**, **`StockHealthBar`** — user-centric queries and interactions.
+- **Component tests** — **`ReservationForm`**, **`ReservationRow`**, **`StockHealthBar`**: RTL queries, **`userEvent`**, **`sonner`** mocked where needed.
+- **Integration test** — **`App.integration.test.tsx`** mounts the real **`App`**, replaces **`fetch`** with responses shaped like **`ApiEnvelope`** / **`PageResponse`**, and asserts load → create reservation → list update → **Confirm** without a live backend.
 
 ### Frontend trade-offs
 

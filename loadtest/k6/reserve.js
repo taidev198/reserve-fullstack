@@ -1,6 +1,7 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 import { Counter, Trend } from "k6/metrics";
+import { buildHtmlReport } from "./report-html.js";
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 
@@ -100,10 +101,60 @@ export default function () {
   sleep(Number(__ENV.THINK_MS || 0) / 1000);
 }
 
-export function handleSummary(data) {
+function metricValues(m, name) {
+  const metric = m[name];
+  if (!metric || !metric.values) {
+    return {};
+  }
+  return metric.values;
+}
+
+function extractReportPayload(data) {
+  const m = data.metrics || {};
+  const d = metricValues(m, "http_req_duration");
+  const reqs = metricValues(m, "http_reqs");
+  const c429 = metricValues(m, "http_429_rate_limit");
+  const c503 = metricValues(m, "http_503_circuit_open");
+  const failed = metricValues(m, "http_req_failed");
+  const checks = metricValues(m, "checks");
   return {
-    stdout: textSummary(data),
+    scenario: { baseUrl: BASE_URL, target: target, ramp: ramp, hold: hold },
+    httpReqs: reqs.count != null ? reqs.count : 0,
+    duration: {
+      avg: d.avg,
+      min: d.min,
+      med: d.med,
+      max: d.max,
+      p90: d["p(90)"],
+      p95: d["p(95)"],
+    },
+    httpFailedRate: failed.rate != null ? failed.rate : null,
+    r429: c429.count != null ? c429.count : 0,
+    r503: c503.count != null ? c503.count : 0,
+    checkPasses: checks.passes,
+    checkFails: checks.fails,
   };
+}
+
+export function handleSummary(data) {
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const payload = extractReportPayload(data);
+  const html = buildHtmlReport(payload);
+  const slimJson = JSON.stringify(payload, null, 2);
+
+  const out = {
+    stdout: textSummary(data) + "\n  HTML report: reports/k6-report-latest.html\n",
+    "reports/k6-report-latest.html": html,
+    "reports/summary-latest.json": slimJson,
+    [`reports/k6-report-${ts}.html`]: html,
+    [`reports/summary-${ts}.json`]: slimJson,
+  };
+
+  if (__ENV.K6_EXPORT_FULL_SUMMARY === "1") {
+    out[`reports/full-summary-${ts}.json`] = JSON.stringify(data, null, 2);
+  }
+
+  return out;
 }
 
 function textSummary(data) {

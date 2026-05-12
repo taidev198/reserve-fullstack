@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U warehouse -d warehouse"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d warehouse"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,13 +24,30 @@ services:
     # AOF on with everysec — survives a crash with at most 1s of data
     # loss. For stock counts we also have Postgres as the cold-start
     # source of truth (RedisInventoryBootstrap re-seeds on startup).
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    # Password matches application.yml default REDIS_MASTER_PASS (123456).
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+        "--requirepass",
+        "${REDIS_MASTER_PASS:-123456}",
+      ]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_MASTER_PASS:-123456}",
+          "ping",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10

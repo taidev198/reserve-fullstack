@@ -1,0 +1,18 @@
+# Activate with: SPRING_PROFILES_ACTIVE=loadtest
+# (or append ,loadtest to an existing list)
+#
+# Resilience4j @RateLimiter on ReservationController — default cap is low for UX;
+# load tests need it effectively off so 429s do not dominate results.
+
+spring:
+  config:
+    activate:
+      on-profile: loadtest
+
+resilience4j:
+  ratelimiter:
+    instances:
+      reservationApi:
+        limit-for-period: 2147483647
+        limit-refresh-period: 1s
+        timeout-duration: 0ms

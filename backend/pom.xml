@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.cmc</groupId>
+    <groupId>com.taidev</groupId>
     <artifactId>warehouse-reservation</artifactId>
     <version>1.0.0</version>
     <name>warehouse-reservation</name>
@@ -104,6 +104,11 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!-- Align migration checksums in the DB after an already-applied script is edited (dev only). -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
