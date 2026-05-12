@@ -1,0 +1,60 @@
+# Backend tests + JaCoCo. Requires Docker (Testcontainers). Uploads HTML/XML report; optional Codecov.
+name: Backend CI
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Run tests with JaCoCo
+        working-directory: backend
+        run: mvn -B test
+
+      - name: JaCoCo report summary
+        if: success()
+        run: |
+          echo "## JaCoCo coverage report" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download the **jacoco-backend-report** artifact from this job to open \`index.html\` locally (Git does not commit \`backend/target/\`)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Optional: add a **CODECOV_TOKEN** repository secret for uploads to [Codecov](https://codecov.io/)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JaCoCo report (HTML + XML)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-backend-report
+          path: backend/target/site/jacoco/
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: success()
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: backend/target/site/jacoco/jacoco.xml
+          flags: backend
+          name: warehouse-backend
+          fail_ci_if_error: false

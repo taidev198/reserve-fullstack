@@ -1,5 +1,10 @@
 # Warehouse Inventory Reservation System
 
+[![Backend CI](https://github.com/taidev198/reserve-fullstack/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/taidev198/reserve-fullstack/actions/workflows/backend-ci.yml)
+[![codecov](https://codecov.io/gh/taidev198/reserve-fullstack/graph/badge.svg)](https://codecov.io/gh/taidev198/reserve-fullstack)
+
+*The Codecov badge fills in after you import this repository on [codecov.io](https://codecov.io/gh/taidev198/reserve-fullstack) and add the **`CODECOV_TOKEN`** secret (see **Backend code coverage** under Tests).*
+
 Full-stack implementation of **Challenge 2 — Warehouse Inventory Reservation System** (Middle Fullstack Java Engineer exercise). Multiple callers (UI or API) can reserve inventory for orders, then confirm or cancel. The design focuses on **correct concurrency** so stock is never oversold under parallel requests.
 
 ---
@@ -99,6 +104,22 @@ Faster **unit** tests (no Redis): **`InventoryTest`**, **`ReservationStateTest`*
 | **`ReservationForm.test.tsx`**, **`ReservationRow.test.tsx`**, **`StockHealthBar.test.tsx`** | Component behaviour (validation, toasts, optimistic actions, meter). |
 
 Vitest is configured in **`vite.config.ts`** (`environment: 'jsdom'`, **`setupFiles: ./src/test/setup.ts`**).
+
+#### Backend code coverage (JaCoCo)
+
+**Why you do not see JaCoCo files in the GitHub *code* tab:** `backend/target/` (including `site/jacoco/`) is **gitignored**. Coverage is generated on each machine or in **GitHub Actions**, not stored as committed files.
+
+**To get JaCoCo on GitHub:** commit and push **[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml)** (this repo had it only locally until committed). Then:
+
+1. Open your repository on GitHub → **Actions**.
+2. Select **Backend CI** → pick the latest successful run.
+3. Scroll to **Artifacts** → download **`jacoco-backend-report`** (zip). Unzip and open **`index.html`** in a browser.
+
+You can also click **Run workflow** on **Actions → Backend CI** (manual **`workflow_dispatch`**) after the workflow exists on the default branch.
+
+The backend **`pom.xml`** configures **`jacoco-maven-plugin`**: **`prepare-agent`** on the test JVM and **`report`** bound to the **`test`** phase. After **`cd backend && ./mvnw test`**, open the HTML report at **`backend/target/site/jacoco/index.html`**. Machine-readable coverage is in **`backend/target/site/jacoco/jacoco.xml`**.
+
+On **GitHub**, workflow **[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml)** runs the same tests (Docker available for Testcontainers), uploads the **`jacoco-backend-report`** artifact (HTML + XML) on each run, and optionally pushes **`jacoco.xml`** to **[Codecov](https://codecov.io/)** when you add a repository secret **`CODECOV_TOKEN`** (create a token at Codecov after importing **`taidev198/reserve-fullstack`**). The Codecov badge above then reflects branch coverage on the default branch.
 
 ### Load testing with wrk
 
@@ -285,6 +306,9 @@ Integration test **`ReservationServiceIntegrationTest#concurrent_reservations_ne
 
 ```
 .
+├── .github/
+│   └── workflows/
+│       └── backend-ci.yml    # Maven test + JaCoCo; artifact + optional Codecov
 ├── README.md
 ├── docs/
 │   └── screenshots/            # dashboard.png — UI screenshot for README
