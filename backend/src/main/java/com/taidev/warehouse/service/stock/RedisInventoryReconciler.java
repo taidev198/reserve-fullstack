@@ -7,6 +7,7 @@ import com.taidev.warehouse.service.ReservationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,7 @@ public class RedisInventoryReconciler {
         this.redis = redis;
     }
 
+    @Async
     @Scheduled(fixedDelayString = "${app.stock.reconcile-interval-ms:60000}")
     public void reconcile() {
         int repaired = AppNumbers.ZERO;
